@@ -1,9 +1,32 @@
-#/usr/bin/env bash
+#!/usr/bin/env bash
 
 rofi_theme="$(dirname "$0")/rounded-nord-dark.rasi"
 
+show_help() {
+	local script_name
+	script_name=$(basename "$0")
+
+	cat <<EOF
+Usage:
+  $script_name [--theme PATH]
+  $script_name help
+
+Options:
+  --theme PATH      Use the rofi theme at PATH.
+  --theme=PATH      Use the rofi theme at PATH.
+  -h, --help, help  Show this help message.
+
+Default theme:
+  $rofi_theme
+EOF
+}
+
 while [ $# -gt 0 ]; do
 	case "$1" in
+	help | -h | --help)
+		show_help
+		exit 0
+		;;
 	--theme)
 		if [ -z "$2" ]; then
 			echo "Error: --theme requires a path" >&2
@@ -18,6 +41,7 @@ while [ $# -gt 0 ]; do
 		;;
 	*)
 		echo "Error: unknown option: $1" >&2
+		echo "Run '$0 help' for usage." >&2
 		exit 1
 		;;
 	esac
