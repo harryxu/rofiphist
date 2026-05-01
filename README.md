@@ -17,6 +17,11 @@
 ./rofiphist.sh --theme /path/to/theme.rasi
 ```
 
+## Demo
+
+https://github.com/user-attachments/assets/6cd934e9-568c-4afd-bafb-cae50990c43d.mp4
+
+
 ## Requirements
 
 - `rofi`
