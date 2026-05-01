@@ -2,6 +2,27 @@
 
 rofi_theme="$(dirname "$0")/rounded-nord-dark.rasi"
 
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--theme)
+		if [ -z "$2" ]; then
+			echo "Error: --theme requires a path" >&2
+			exit 1
+		fi
+		rofi_theme="$2"
+		shift 2
+		;;
+	--theme=*)
+		rofi_theme="${1#*=}"
+		shift
+		;;
+	*)
+		echo "Error: unknown option: $1" >&2
+		exit 1
+		;;
+	esac
+done
+
 # Get cliphist history
 cliphist_output=$(cliphist list)
 
