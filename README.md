@@ -1,43 +1,31 @@
 # rofiphist
-
 `rofiphist.sh` is a small Bash launcher for browsing and managing
 [`cliphist`](https://github.com/sentriz/cliphist) clipboard history through
 [`rofi`](https://github.com/davatorium/rofi).
 
-The script opens an interactive rofi menu with clipboard history entries. Press
-`Enter` to decode the selected entry and copy it back to the clipboard with
-`wl-copy`. Press `Alt+Enter` to open an actions menu where you can copy, copy
-and delete, or delete the selected history item. The main menu also includes
-maintenance commands for wiping or compacting the cliphist database.
+<p align="center">
+  <img src="./preview.png" />
+</p>
+
+
+## Usage
+
+```sh
+./rofiphist.sh
+
+# Use a custom rofi theme:
+./rofiphist.sh --theme /path/to/theme.rasi
+```
 
 ## Requirements
 
 - `rofi`
 - `cliphist`
 - `wl-copy` from `wl-clipboard`
-- `awk` and `xargs`
 
-## Usage
+## Use a key remapper to launch the script
 
-```sh
-./rofiphist.sh
-```
-
-Use a custom rofi theme:
-
-```sh
-./rofiphist.sh --theme /path/to/theme.rasi
-```
-
-Show help:
-
-```sh
-./rofiphist.sh --help
-```
-
-### Use a key remapper to launch the script
-
-#### [xremap](https://github.com/xremap/xremap)
+### [xremap](https://github.com/xremap/xremap)
 
 ```yml
 keymap:
