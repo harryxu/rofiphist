@@ -1,6 +1,6 @@
 #/usr/bin/env bash
 
-rofi_theme="~/.config/rofi/themes/rounded-nord-dark.rasi"
+rofi_theme="$(dirname "$0")/rounded-nord-dark.rasi"
 
 # Get cliphist history
 cliphist_output=$(cliphist list)
