@@ -206,10 +206,10 @@ while true; do
 				echo "$selected" | cliphist decode | wl-copy
 				;;
 			copy_and_delete)
-				# First copy to clipboard
+				# First copy to clipboard, and the copied line will become the first item in cliphist.
 				echo "$selected" | cliphist decode | wl-copy
-				# Then delete from history using delete-query
-				echo "$selected" | awk '{print $2}' | xargs cliphist delete-query
+				# Then delete the first item, which is the copied line.
+				cliphist list | head -n 1 | cliphist delete
 				;;
 			delete)
 				echo "$selected" | cliphist delete
