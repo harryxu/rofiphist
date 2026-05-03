@@ -51,7 +51,6 @@ keymap:
           - "/path/to/rofiphist.sh"
 ```
 
-By default, the script uses `rounded-nord-dark.rasi` rofi theme from the same directory as
-the script. This default theme comes from the
+By default, the script uses `rounded-nord-dark.rasi` rofi theme comes from the
 [rofi-themes-collection](https://github.com/newmanls/rofi-themes-collection)
 project.
