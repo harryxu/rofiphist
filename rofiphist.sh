@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 rofi_theme="$(dirname "$0")/rounded-nord-dark.rasi"
+img_cache_dir="/tmp/cliphist"
 
 show_help() {
 	local script_name
@@ -47,8 +48,57 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
-# Get cliphist history
-cliphist_output=$(cliphist list)
+# Initialize image cache directory (clear stale thumbnails on each run)
+rm -rf "$img_cache_dir"
+mkdir -p "$img_cache_dir"
+
+# Preprocess cliphist list output:
+#   - Previewable images (jpg/jpeg/png/bmp/gif/webp): decode to thumbnail, append \0icon\x1f<path>
+#   - Other binary entries: reformat as "<id>\t[file: <mime>]"
+#   - Text entries: pass through unchanged
+prepare_cliphist_list() {
+	gawk -v cache="$img_cache_dir" '
+		# Skip stray HTML meta lines that cliphist may emit
+		/^[0-9]+[ \t]<meta http-equiv=/ { next }
+
+		# Previewable image formats: generate thumbnail and attach icon path
+		match($0, /^([0-9]+)[ \t].*binary.*(jpg|jpeg|png|bmp|gif|webp)/, grp) {
+			id  = grp[1]
+			ext = grp[2]
+			out = cache "/" id "." ext
+			# Write the full entry line to a temp file, then decode via stdin redirect.
+			# cliphist decode requires the complete "id\t..." line; plain "echo id" fails
+			# because the trailing newline breaks strconv.Atoi in cliphist ID parsing.
+			tmpfile = cache "/_in_" id
+			print $0 > tmpfile
+			close(tmpfile)
+			system("cliphist decode < " tmpfile " > " out " 2>/dev/null; rm -f " tmpfile)
+			print $0 "\0icon\x1f" out
+			next
+		}
+
+		# Other binary entries: show "[file: mime/type]" instead of raw binary metadata
+		/binary/ {
+			match($0, /^([0-9]+)[ \t]/, id_grp)
+			id = id_grp[1]
+			if (match($0, /\] ([a-zA-Z0-9_.+-]+\/[a-zA-Z0-9_.+-]+) \]/, mime_grp)) {
+				print id "\t[file: " mime_grp[1] "]"
+			} else {
+				print id "\t[binary data]"
+			}
+			next
+		}
+
+		# Regular text entries
+		{ print }
+	'
+}
+
+# Write processed cliphist list to a temp file.
+# Must use a file (not a variable) because bash $() strips null bytes,
+# and rofi's icon syntax requires a literal null byte: \0icon\x1f<path>
+cliphist_list_file="$img_cache_dir/list"
+cliphist list | prepare_cliphist_list > "$cliphist_list_file"
 
 # Define custom commands as indexed array
 # Format: "display_text,command"
@@ -109,15 +159,15 @@ is_submenu_action() {
 
 # Function to show main menu
 show_main_menu() {
-	local options="$cliphist_output"
-	for cmd_entry in "${custom_commands[@]}"; do
-		local display="${cmd_entry%,*}"
-		options=$(printf "%s\n%s" "$options" "$display")
-	done
-
 	local MESG="""<span size=\"x-small\">Alt + Enter for more actions.</span>"""
 
-	echo "$options" | rofi \
+	# Stream list file (preserving null bytes for icon metadata) then append custom commands
+	{
+		cat "$cliphist_list_file"
+		for cmd_entry in "${custom_commands[@]}"; do
+			printf "%s\n" "${cmd_entry%,*}"
+		done
+	} | rofi \
 		-dmenu \
 		-i \
 		-display-columns 2 \
@@ -127,6 +177,7 @@ show_main_menu() {
 		-me-select-entry '' \
 		-me-accept-entry MousePrimary \
 		-hover-select \
+		-show-icons \
 		-kb-custom-1 "Alt+Return"
 
 	return $?
@@ -157,7 +208,8 @@ show_submenu() {
 		-theme "$rofi_theme" \
 		-me-select-entry '' \
 		-me-accept-entry MousePrimary \
-		-hover-select
+		-hover-select \
+		-show-icons
 
 	return $?
 }
