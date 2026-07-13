@@ -61,19 +61,28 @@ prepare_cliphist_list() {
 		# Skip stray HTML meta lines that cliphist may emit
 		/^[0-9]+[ \t]<meta http-equiv=/ { next }
 
-		# Previewable image formats: generate thumbnail and attach icon path
-		match($0, /^([0-9]+)[ \t].*binary.*(jpg|jpeg|png|bmp|gif|webp)/, grp) {
-			id  = grp[1]
-			ext = grp[2]
-			out = cache "/" id "." ext
-			# Write the full entry line to a temp file, then decode via stdin redirect.
-			# cliphist decode requires the complete "id\t..." line; plain "echo id" fails
-			# because the trailing newline breaks strconv.Atoi in cliphist ID parsing.
+		# Previewable images — standard cliphist format: "[[ binary data 9 KiB png 129x125 ]]"
+		# Extract size+unit and dimensions to build a cleaner label: "[[ Image 9 KiB png 129x125 ]]"
+		match($0, /^([0-9]+)[ \t]\[\[ binary data ([0-9.]+ [a-zA-Z]+) (jpg|jpeg|png|bmp|gif|webp) ([0-9]+x[0-9]+) \]\]/, img_grp) {
+			id = img_grp[1]; size = img_grp[2]; ext = img_grp[3]; dims = img_grp[4]
+			out     = cache "/" id "." ext
 			tmpfile = cache "/_in_" id
 			print $0 > tmpfile
 			close(tmpfile)
 			system("cliphist decode < " tmpfile " > " out " 2>/dev/null; rm -f " tmpfile)
-			print $0 "\0icon\x1f" out
+			print id "\t[[ Image " size " " ext " " dims " ]]" "\0icon\x1f" out
+			next
+		}
+
+		# Fallback: image entry whose format does not match the pattern above
+		match($0, /^([0-9]+)[ \t].*binary.*(jpg|jpeg|png|bmp|gif|webp)/, grp) {
+			id = grp[1]; ext = grp[2]
+			out     = cache "/" id "." ext
+			tmpfile = cache "/_in_" id
+			print $0 > tmpfile
+			close(tmpfile)
+			system("cliphist decode < " tmpfile " > " out " 2>/dev/null; rm -f " tmpfile)
+			print id "\t[[ Image " ext " ]]" "\0icon\x1f" out
 			next
 		}
 
