@@ -157,6 +157,46 @@ is_submenu_action() {
 	return 1
 }
 
+# Copy a cliphist entry to the clipboard.
+# For entries that look like file:// URIs, further checks CRLF line endings:
+#   - Real file-manager copies use text/uri-list (RFC 2483) with CRLF → wl-copy --type text/uri-list
+#   - Plain text that happens to start with "file://" uses LF only   → wl-copy (text/plain)
+copy_entry() {
+	local selected="$1"
+	local content="${selected#*$'\t'}"   # strip leading "<id>\t"
+
+	if [[ "$content" == file://* ]]; then
+		# Extract the local path from the first file:// URI and verify it exists.
+		# If the file is gone (stale history entry) or the "file://..." text was
+		# copied from a browser/editor, fall back to plain text copy.
+		local first_line="${content%%[$'\r\n']*}"   # first URI only, trim any line endings
+		local local_path="${first_line#file://}"    # strip "file://" scheme prefix → /abs/path
+		if [[ ! -e "$local_path" ]]; then
+			echo "$selected" | cliphist decode | wl-copy
+			return
+		fi
+
+		# Decode once to a temp file so we can both inspect and forward the bytes.
+		local tmpfile
+		tmpfile=$(mktemp /tmp/cliphist_copy.XXXXXX)
+		echo "$selected" | cliphist decode > "$tmpfile"
+
+		# RFC 2483 text/uri-list uses CRLF (\r\n). Plain text uses LF only.
+		# grep -q $'\r' detects the carriage return that marks a real URI list.
+		if grep -q $'\r' "$tmpfile" 2>/dev/null; then
+			# Real file-manager copy: use text/uri-list so apps can paste the file.
+			# wl-copy still exposes text/plain alongside it, so text editors work too.
+			wl-copy --type text/uri-list < "$tmpfile"
+		else
+			# Plain text that starts with "file://" — treat as normal text.
+			wl-copy < "$tmpfile"
+		fi
+		rm -f "$tmpfile"
+	else
+		echo "$selected" | cliphist decode | wl-copy
+	fi
+}
+
 # Function to show main menu
 show_main_menu() {
 	local MESG="""<span size=\"x-small\">Alt + Enter for more actions.</span>"""
@@ -249,17 +289,17 @@ while true; do
 		# Execute submenu action based on choice
 		if [ "$submenu_choice" = "$selected" ]; then
 			# Copy selected item to clipboard
-			echo "$selected" | cliphist decode | wl-copy
+			copy_entry "$selected"
 		elif is_submenu_action "$submenu_choice"; then
 			action=$(entry_value "$submenu_choice" submenu_actions)
 
 			case "$action" in
 			copy)
-				echo "$selected" | cliphist decode | wl-copy
+				copy_entry "$selected"
 				;;
 			copy_and_delete)
 				# First copy to clipboard, and the copied line will become the first item in cliphist.
-				echo "$selected" | cliphist decode | wl-copy
+				copy_entry "$selected"
 				# Then delete the first item, which is the copied line.
 				cliphist list | head -n 1 | cliphist delete
 				;;
@@ -272,7 +312,7 @@ while true; do
 		exit 0
 	else
 		# Normal Enter key (exit code 0) - copy history item to clipboard
-		echo "$selected" | cliphist decode | wl-copy
+		copy_entry "$selected"
 		exit 0
 	fi
 done
