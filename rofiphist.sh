@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-rofi_theme="$(dirname "$0")/rounded-nord-dark.rasi"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+rofi_theme="$script_dir/rounded-nord-dark.rasi"
 img_cache_dir="/tmp/cliphist"
 
 show_help() {
@@ -57,7 +58,7 @@ mkdir -p "$img_cache_dir"
 #   - Other binary entries: reformat as "<id>\t[file: <mime>]"
 #   - Text entries: pass through unchanged
 prepare_cliphist_list() {
-	gawk -v cache="$img_cache_dir" '
+	gawk -v cache="$img_cache_dir" -v icondir="$script_dir" '
 		# Skip stray HTML meta lines that cliphist may emit
 		/^[0-9]+[ \t]<meta http-equiv=/ { next }
 
@@ -90,16 +91,25 @@ prepare_cliphist_list() {
 		/binary/ {
 			match($0, /^([0-9]+)[ \t]/, id_grp)
 			id = id_grp[1]
-			if (match($0, /\] ([a-zA-Z0-9_.+-]+\/[a-zA-Z0-9_.+-]+) \]/, mime_grp)) {
-				print id "\t[file: " mime_grp[1] "]"
+			if (match($0, /([a-zA-Z0-9_.+-]+\/[a-zA-Z0-9_.+-]+)/, mime_grp)) {
+				print id "\t[file: " mime_grp[1] "]" "\0icon\x1f" icondir "/file.svg"
 			} else {
-				print id "\t[binary data]"
+				print id "\t[binary data]" "\0icon\x1f" icondir "/file.svg"
 			}
 			next
 		}
 
 		# Regular text entries
-		{ print }
+		{
+			match($0, /^([0-9]+)[ \t](.*)/, txt_grp)
+			id = txt_grp[1]
+			content = txt_grp[2]
+			if (content ~ /^file:\/\//) {
+				print id "\t" content "\0icon\x1f" icondir "/file.svg"
+			} else {
+				print id "\t" content "\0icon\x1f" icondir "/text.svg"
+			}
+		}
 	'
 }
 
@@ -107,7 +117,7 @@ prepare_cliphist_list() {
 # Must use a file (not a variable) because bash $() strips null bytes,
 # and rofi's icon syntax requires a literal null byte: \0icon\x1f<path>
 cliphist_list_file="$img_cache_dir/list"
-cliphist list | prepare_cliphist_list > "$cliphist_list_file"
+cliphist list | prepare_cliphist_list >"$cliphist_list_file"
 
 # Define custom commands as indexed array
 # Format: "display_text,command"
@@ -172,14 +182,14 @@ is_submenu_action() {
 #   - Plain text that happens to start with "file://" uses LF only   → wl-copy (text/plain)
 copy_entry() {
 	local selected="$1"
-	local content="${selected#*$'\t'}"   # strip leading "<id>\t"
+	local content="${selected#*$'\t'}" # strip leading "<id>\t"
 
 	if [[ "$content" == file://* ]]; then
 		# Extract the local path from the first file:// URI and verify it exists.
 		# If the file is gone (stale history entry) or the "file://..." text was
 		# copied from a browser/editor, fall back to plain text copy.
-		local first_line="${content%%[$'\r\n']*}"   # first URI only, trim any line endings
-		local local_path="${first_line#file://}"    # strip "file://" scheme prefix → /abs/path
+		local first_line="${content%%[$'\r\n']*}" # first URI only, trim any line endings
+		local local_path="${first_line#file://}"  # strip "file://" scheme prefix → /abs/path
 		if [[ ! -e "$local_path" ]]; then
 			echo "$selected" | cliphist decode | wl-copy
 			return
@@ -188,17 +198,17 @@ copy_entry() {
 		# Decode once to a temp file so we can both inspect and forward the bytes.
 		local tmpfile
 		tmpfile=$(mktemp /tmp/cliphist_copy.XXXXXX)
-		echo "$selected" | cliphist decode > "$tmpfile"
+		echo "$selected" | cliphist decode >"$tmpfile"
 
 		# RFC 2483 text/uri-list uses CRLF (\r\n). Plain text uses LF only.
 		# grep -q $'\r' detects the carriage return that marks a real URI list.
 		if grep -q $'\r' "$tmpfile" 2>/dev/null; then
 			# Real file-manager copy: use text/uri-list so apps can paste the file.
 			# wl-copy still exposes text/plain alongside it, so text editors work too.
-			wl-copy --type text/uri-list < "$tmpfile"
+			wl-copy --type text/uri-list <"$tmpfile"
 		else
 			# Plain text that starts with "file://" — treat as normal text.
-			wl-copy < "$tmpfile"
+			wl-copy <"$tmpfile"
 		fi
 		rm -f "$tmpfile"
 	else
